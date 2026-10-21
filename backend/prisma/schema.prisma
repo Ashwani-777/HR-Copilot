@@ -1,0 +1,185 @@
+// HR Copilot data model. Every tenant-owned row carries `companyId`; every query filters on it.
+// Vector + full-text columns on Chunk are `Unsupported` (Prisma can't model them) and are read/written
+// with $queryRaw. The extension, generated tsvector column and GIN/HNSW indexes live in the raw-SQL
+// migration (prisma/migrations/*_init/migration.sql), so use `prisma migrate deploy`, not `migrate dev`.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum AttendanceStatus {
+  ON_TIME
+  LATE
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  EARNED
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DocumentStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+model Company {
+  id              String   @id @default(uuid())
+  name            String
+  officeLat       Float
+  officeLng       Float
+  geofenceRadiusM Int
+  /// Local shift start, "HH:MM" in `timezone`
+  shiftStart      String
+  timezone        String   @default("Asia/Kolkata")
+  createdAt       DateTime @default(now())
+
+  users      User[]
+  employees  Employee[]
+  attendance Attendance[]
+  leaves     LeaveRequest[]
+  documents  Document[]
+  chunks     Chunk[]
+}
+
+model Employee {
+  id          String   @id @default(uuid())
+  companyId   String
+  name        String
+  email       String
+  department  String
+  designation String
+  joinedAt    DateTime @db.Date
+  createdAt   DateTime @default(now())
+
+  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user       User?
+  attendance Attendance[]
+  leaves     LeaveRequest[]
+
+  @@unique([companyId, email])
+  @@index([companyId, name])
+}
+
+model User {
+  id           String   @id @default(uuid())
+  companyId    String
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  employeeId   String?  @unique
+  createdAt    DateTime @default(now())
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+}
+
+model Attendance {
+  id         String           @id @default(uuid())
+  companyId  String
+  employeeId String
+  /// Local calendar date (company timezone) of the check-in
+  date       DateTime         @db.Date
+  checkInAt  DateTime
+  checkOutAt DateTime?
+  checkInLat Float
+  checkInLng Float
+  distanceM  Int
+  status     AttendanceStatus
+  createdAt  DateTime         @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// One check-in per employee per day (also the race-safe guard behind 409 ALREADY_CHECKED_IN)
+  @@unique([employeeId, date])
+  @@index([companyId, date])
+}
+
+model LeaveRequest {
+  id          String      @id @default(uuid())
+  companyId   String
+  employeeId  String
+  type        LeaveType
+  fromDate    DateTime    @db.Date
+  toDate      DateTime    @db.Date
+  /// Working days (Mon–Fri) in [fromDate, toDate]
+  days        Int
+  reason      String
+  status      LeaveStatus @default(PENDING)
+  decidedAt   DateTime?
+  decidedById String?
+  createdAt   DateTime    @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status])
+  @@index([employeeId, fromDate])
+}
+
+model Document {
+  id             String         @id @default(uuid())
+  companyId      String
+  title          String
+  filename       String
+  mimeType       String
+  storagePath    String
+  sizeBytes      Int
+  status         DocumentStatus @default(QUEUED)
+  progress       Int            @default(0)
+  pages          Int?
+  chunkCount     Int?
+  error          String?
+  /// Embedding model used for this document's chunks; vector search only compares like with like
+  embeddingModel String?
+  uploadedById   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  chunks  Chunk[]
+
+  @@index([companyId, createdAt])
+}
+
+model Chunk {
+  id         String                       @id @default(uuid())
+  companyId  String
+  documentId String
+  chunkIndex Int
+  page       Int?
+  content    String
+  embedding  Unsupported("vector(1536)")?
+  /// GENERATED ALWAYS AS (to_tsvector('english', content)) STORED — see migration
+  tsv        Unsupported("tsvector")?
+  createdAt  DateTime                     @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([documentId])
+}

@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens — Apple-like monochrome. Channels so Tailwind opacity modifiers work. */
+:root {
+  --bg: 255 255 255; /* #ffffff */
+  --surface: 245 245 247; /* #f5f5f7 */
+  --ink: 29 29 31; /* #1d1d1f */
+  --secondary: 110 110 115; /* #6e6e73 */
+  --tertiary: 134 134 139; /* #86868b */
+  --hairline: 210 210 215; /* #d2d2d7 */
+  --green: 36 138 61; /* #248a3d */
+  --orange: 201 52 0; /* #c93400 */
+  --red: 215 0 21; /* #d70015 */
+
+  --shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.06);
+  --nav-height: 52px;
+
+  color-scheme: light;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-bg text-ink font-sans text-body;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: rgb(var(--ink) / 0.12);
+  }
+
+  /* Visible keyboard focus everywhere, invisible for mouse users. */
+  :focus-visible {
+    outline: 2px solid rgb(var(--ink));
+    outline-offset: 2px;
+  }
+
+  /* lucide icons: brand stroke width */
+  svg.lucide {
+    stroke-width: 1.5;
+  }
+
+  input[type='date']::-webkit-calendar-picker-indicator {
+    opacity: 0.55;
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .page-title {
+    @apply text-display-sm md:text-display;
+  }
+
+  .container-page {
+    @apply mx-auto w-full max-w-content px-4 sm:px-6;
+  }
+
+  .nav-blur {
+    background: rgba(255, 255, 255, 0.72);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+
+  /* Shimmering grey text for the copilot's "Checking…" tool line. */
+  .text-shimmer {
+    color: rgb(var(--tertiary));
+    background: linear-gradient(
+      90deg,
+      rgb(var(--tertiary)) 0%,
+      rgb(var(--tertiary)) 40%,
+      rgb(var(--ink) / 0.85) 50%,
+      rgb(var(--tertiary)) 60%,
+      rgb(var(--tertiary)) 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 2.2s linear infinite;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .text-shimmer {
+    animation: none;
+    -webkit-text-fill-color: rgb(var(--tertiary));
+  }
+}
